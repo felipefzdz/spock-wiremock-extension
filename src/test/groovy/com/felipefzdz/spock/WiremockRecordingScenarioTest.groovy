@@ -46,7 +46,6 @@ class WiremockRecordingScenarioTest extends Specification {
             mode = WiremockScenarioMode.REPLAYING,
             replayPort = 8082
     )
-    @IgnoreRest
     def "replay"() {
         expect:
         fetch('http://localhost:8082/some/thing') == 'Hello world'

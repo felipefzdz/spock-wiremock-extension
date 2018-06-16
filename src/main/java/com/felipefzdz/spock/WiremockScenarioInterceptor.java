@@ -6,9 +6,7 @@ import org.spockframework.runtime.extension.IMethodInterceptor;
 import org.spockframework.runtime.extension.IMethodInvocation;
 import spock.lang.Shared;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.recordSpec;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
@@ -18,6 +16,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     private final Proxies proxies;
     private final WiremockScenarioMode mode;
     private final int replayPort;
+    private static final Set<WiremockScenarioMode> alreadyIntercepted = new TreeSet<>();
 
     @Shared
     private List<WireMockServer> servers = new ArrayList<>();
@@ -30,24 +29,22 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
 
     @Override
     public void interceptSetupSpecMethod(IMethodInvocation invocation) throws Throwable {
-        setupWiremockScenario();
+        if (alreadyIntercepted.add(mode)) {
+            setupWiremockScenario();
+        }
         invocation.proceed();
     }
 
     @Override
     public void interceptSetupMethod(IMethodInvocation invocation) throws Throwable {
-        setupWiremockScenario();
+        if (alreadyIntercepted.add(mode)) {
+            setupWiremockScenario();
+        }
         invocation.proceed();
     }
 
     @Override
     public void interceptCleanupSpecMethod(IMethodInvocation invocation) throws Throwable {
-        invocation.proceed();
-        cleanupWiremockScenario();
-    }
-
-    @Override
-    public void interceptCleanupMethod(IMethodInvocation invocation) throws Throwable {
         invocation.proceed();
         cleanupWiremockScenario();
     }
