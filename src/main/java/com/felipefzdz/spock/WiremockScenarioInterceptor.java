@@ -4,8 +4,12 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import org.spockframework.runtime.extension.AbstractMethodInterceptor;
 import org.spockframework.runtime.extension.IMethodInterceptor;
 import org.spockframework.runtime.extension.IMethodInvocation;
-import spock.lang.Shared;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.recordSpec;
@@ -17,9 +21,8 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     private final WiremockScenarioMode mode;
     private final int replayPort;
     private static final Set<WiremockScenarioMode> alreadyIntercepted = new TreeSet<>();
-
-    @Shared
-    private List<WireMockServer> servers = new ArrayList<>();
+    private static final List<WireMockServer> recordingServers = new ArrayList<>();
+    private static WireMockServer replayServer;
 
     WiremockScenarioInterceptor(int[] ports, String[] targets, WiremockScenarioMode mode, int replayPort) {
         this.mode = mode;
@@ -46,7 +49,17 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     @Override
     public void interceptCleanupSpecMethod(IMethodInvocation invocation) throws Throwable {
         invocation.proceed();
-        cleanupWiremockScenario();
+        if (alreadyIntercepted.remove(mode)) {
+            cleanupWiremockScenario();
+        }
+    }
+
+    @Override
+    public void interceptCleanupMethod(IMethodInvocation invocation) throws Throwable {
+        invocation.proceed();
+        if (alreadyIntercepted.remove(mode)) {
+            cleanupWiremockScenario();
+        }
     }
 
     private void setupWiremockScenario() {
@@ -62,32 +75,41 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
         }
     }
 
-    private void record() {
+    private void record()  {
         proxies.iterator().forEachRemaining(proxy -> {
-            WireMockServer server = new WireMockServer(options().port(proxy.port));
+            createDirectory();
+            WireMockServer server = new WireMockServer(options().port(proxy.port).usingFilesUnderDirectory("build/wiremock/1"));
             server.start();
             server.startRecording(recordSpec().forTarget(proxy.target));
-            servers.add(server);
+            recordingServers.add(server);
         });
     }
 
+    private Path createDirectory() {
+        try {
+            return Files.createDirectories(Paths.get("build/wiremock/1/mappings"));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private void replay() {
-        WireMockServer server = new WireMockServer(options().port(replayPort).usingFilesUnderDirectory("src/test/resources"));
-        server.start();
-        servers.add(server);
+        replayServer = new WireMockServer(options().port(replayPort).usingFilesUnderDirectory("build/wiremock/1"));
+        replayServer.start();
     }
 
     private void cleanupWiremockScenario() {
         switch (mode) {
             case RECORDING: {
-                servers.forEach(server -> {
+                recordingServers.forEach(server -> {
                     server.stopRecording();
                     server.stop();
                 });
+                recordingServers.clear();
                 break;
             }
             case REPLAYING: {
-                servers.forEach(WireMockServer::stop);
+                replayServer.stop();
                 break;
             }
             case DISABLED:
