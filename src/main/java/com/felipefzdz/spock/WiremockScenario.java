@@ -1,5 +1,6 @@
 package com.felipefzdz.spock;
 
+import groovy.lang.Closure;
 import org.spockframework.runtime.extension.ExtensionAnnotation;
 
 import java.lang.annotation.ElementType;
@@ -21,5 +22,7 @@ public @interface WiremockScenario {
     String mappingsParentFolder() default "";
 
     String mappingsFolder() default "";
+
+    Class<? extends Closure> recordIf() default Closure.class;
 
 }

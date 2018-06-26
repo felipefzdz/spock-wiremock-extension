@@ -1,18 +1,21 @@
 package com.felipefzdz.spock;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
+import groovy.lang.Closure;
+import org.spockframework.runtime.GroovyRuntimeUtil;
 import org.spockframework.runtime.extension.AbstractMethodInterceptor;
+import org.spockframework.runtime.extension.ExtensionException;
 import org.spockframework.runtime.extension.IMethodInterceptor;
 import org.spockframework.runtime.extension.IMethodInvocation;
+import org.spockframework.runtime.extension.builtin.PreconditionContext;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.recordSpec;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
@@ -23,6 +26,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     private final int replayPort;
     private final String mappingsParentFolder;
     private final String maybeMappingsFolder;
+    private final Class<? extends Closure> recordIf;
     private final String featureName;
     private static final List<WireMockServer> recordingServers = new ArrayList<>();
     private static WireMockServer replayServer;
@@ -34,10 +38,12 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
             int replayPort,
             String maybeMappingsParentFolder,
             String maybeMappingsFolder,
+            Class<? extends Closure> recordIf,
             String featureName) {
         this.replayPort = replayPort;
         this.mappingsParentFolder = maybeMappingsParentFolder.isEmpty() ? "src/test/resources/wiremock/" : maybeMappingsParentFolder;
         this.maybeMappingsFolder = maybeMappingsFolder;
+        this.recordIf = recordIf;
         this.featureName = featureName;
         this.proxies = new Proxies(ports, targets);
     }
@@ -45,16 +51,46 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     @Override
     public void interceptSetupSpecMethod(IMethodInvocation invocation) throws Throwable {
         String mappingsFolder = maybeMappingsFolder.isEmpty() ? mappingsFolderForSetupSpecMethod(invocation) : mappingsParentFolder + maybeMappingsFolder;
-        mode = Files.exists(Paths.get(mappingsFolder)) ? WiremockScenarioMode.REPLAYING : WiremockScenarioMode.RECORDING;
+        mode = calculateMode(mappingsFolder);
         setupWiremockScenario(maybeMappingsFolder, mode);
         invocation.proceed();
+    }
+
+    private WiremockScenarioMode calculateMode(String mappingsFolder) {
+        Optional<Closure> condition = createCondition();
+        boolean isRecord = condition.map(this::evaluateCondition)
+                .map(GroovyRuntimeUtil::isTruthy)
+                .orElse(false);
+        if (isRecord) {
+            return WiremockScenarioMode.RESET_RECORDING;
+        }
+        return Files.exists(Paths.get(mappingsFolder)) ? WiremockScenarioMode.REPLAYING : WiremockScenarioMode.RECORDING;
+    }
+
+    private Optional<Closure> createCondition() {
+        try {
+            return Optional.of(recordIf.getConstructor(Object.class, Object.class).newInstance(null, null));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    private Object evaluateCondition(Closure condition) {
+        condition.setDelegate(new PreconditionContext());
+        condition.setResolveStrategy(Closure.DELEGATE_ONLY);
+
+        try {
+            return condition.call();
+        } catch (Exception e) {
+            throw new ExtensionException("Failed to evaluate recordIf condition", e);
+        }
     }
 
     @Override
     public void interceptSetupMethod(IMethodInvocation invocation) throws Throwable {
         if (invocation.getFeature().getName().equals(featureName)) {
             String mappingsFolder = maybeMappingsFolder.isEmpty() ? mappingsFolderForSetupMethod(invocation) : mappingsParentFolder + maybeMappingsFolder;
-            mode = Files.exists(Paths.get(mappingsFolder)) ? WiremockScenarioMode.REPLAYING : WiremockScenarioMode.RECORDING;
+            mode = calculateMode(mappingsFolder);
             setupWiremockScenario(mappingsFolder, mode);
         }
         invocation.proceed();
@@ -86,12 +122,31 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
 
     private void setupWiremockScenario(String wiremockFolder, WiremockScenarioMode mode) {
         switch (mode) {
+            case RESET_RECORDING:
+                resetRecord(wiremockFolder);
+                break;
             case RECORDING:
                 record(wiremockFolder);
                 break;
             case REPLAYING:
                 replay(wiremockFolder);
                 break;
+        }
+    }
+
+    private void resetRecord(String wiremockFolder) {
+
+        try {
+            Path wiremockPath = Paths.get(wiremockFolder);
+            if (Files.exists(wiremockPath)) {
+                Files.walk(wiremockPath)
+                        .sorted(Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+            }
+            record(wiremockFolder);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
@@ -121,11 +176,11 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     private void cleanupWiremockScenario() {
         switch (mode) {
             case RECORDING: {
-                recordingServers.forEach(server -> {
-                    server.stopRecording();
-                    server.stop();
-                });
-                recordingServers.clear();
+                cleanupRecording();
+                break;
+            }
+            case RESET_RECORDING: {
+                cleanupRecording();
                 break;
             }
             case REPLAYING: {
@@ -133,6 +188,14 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
                 break;
             }
         }
+    }
+
+    private void cleanupRecording() {
+        recordingServers.forEach(server -> {
+            server.stopRecording();
+            server.stop();
+        });
+        recordingServers.clear();
     }
 
     void install(List<List<IMethodInterceptor>> interceptors) {

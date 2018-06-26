@@ -14,7 +14,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*
 import static com.google.common.base.Charsets.UTF_8
 
 @Stepwise
-class WiremockExtensionTest extends Specification {
+class RecordAndReplayTest extends Specification {
 
     @Shared
     @AutoCleanup
@@ -26,16 +26,17 @@ class WiremockExtensionTest extends Specification {
 
     @WiremockScenario(
             ports = [8081],
-            targets = ['http://localhost:8080'],
+            targets = ['http://localhost:9080'],
             mappingsParentFolder = 'src/test/resources/wiremock/',
-            mappingsFolder = 'wiremockExtension'
+            mappingsFolder = 'recordAndReplay'
     )
     def "record"() {
         given:
-        WireMockServer server = new WireMockServer(8080)
+        WireMockServer server = new WireMockServer(9080)
         server.start()
 
         and:
+        configureFor("localhost", 9080)
         stubFor(get(urlEqualTo("/some/thing"))
                 .willReturn(aResponse()
                 .withHeader("Content-Type", "text/plain")
@@ -53,7 +54,7 @@ class WiremockExtensionTest extends Specification {
     @WiremockScenario(
             replayPort = 8082,
             mappingsParentFolder = 'src/test/resources/wiremock/',
-            mappingsFolder = 'wiremockExtension'
+            mappingsFolder = 'recordAndReplay'
     )
     def "replay"() {
         expect:
