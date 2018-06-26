@@ -14,6 +14,7 @@ public class WiremockScenarioExtension extends AbstractAnnotationDrivenExtension
                 annotation.ports(),
                 annotation.targets(),
                 annotation.replayPort(),
+                annotation.mappingsParentFolder(),
                 annotation.mappingsFolder(),
                 ""
         );
@@ -26,6 +27,7 @@ public class WiremockScenarioExtension extends AbstractAnnotationDrivenExtension
                 annotation.ports(),
                 annotation.targets(),
                 annotation.replayPort(),
+                annotation.mappingsParentFolder(),
                 annotation.mappingsFolder(),
                 feature.getName()
         );

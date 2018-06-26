@@ -21,6 +21,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
 
     private final Proxies proxies;
     private final int replayPort;
+    private final String mappingsParentFolder;
     private final String maybeMappingsFolder;
     private final String featureName;
     private static final List<WireMockServer> recordingServers = new ArrayList<>();
@@ -31,17 +32,19 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
             int[] ports,
             String[] targets,
             int replayPort,
-            String mappingsFolder,
+            String maybeMappingsParentFolder,
+            String maybeMappingsFolder,
             String featureName) {
         this.replayPort = replayPort;
-        this.maybeMappingsFolder = mappingsFolder;
+        this.mappingsParentFolder = maybeMappingsParentFolder.isEmpty() ? "src/test/resources/wiremock/" : maybeMappingsParentFolder;
+        this.maybeMappingsFolder = maybeMappingsFolder;
         this.featureName = featureName;
         this.proxies = new Proxies(ports, targets);
     }
 
     @Override
     public void interceptSetupSpecMethod(IMethodInvocation invocation) throws Throwable {
-        String mappingsFolder = maybeMappingsFolder.isEmpty() ? mappingsFolderForSetupSpecMethod(invocation) : maybeMappingsFolder;
+        String mappingsFolder = maybeMappingsFolder.isEmpty() ? mappingsFolderForSetupSpecMethod(invocation) : mappingsParentFolder + maybeMappingsFolder;
         mode = Files.exists(Paths.get(mappingsFolder)) ? WiremockScenarioMode.REPLAYING : WiremockScenarioMode.RECORDING;
         setupWiremockScenario(maybeMappingsFolder, mode);
         invocation.proceed();
@@ -50,7 +53,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     @Override
     public void interceptSetupMethod(IMethodInvocation invocation) throws Throwable {
         if (invocation.getFeature().getName().equals(featureName)) {
-            String mappingsFolder = maybeMappingsFolder.isEmpty() ? mappingsFolderForSetupMethod(invocation) : maybeMappingsFolder;
+            String mappingsFolder = maybeMappingsFolder.isEmpty() ? mappingsFolderForSetupMethod(invocation) : mappingsParentFolder + maybeMappingsFolder;
             mode = Files.exists(Paths.get(mappingsFolder)) ? WiremockScenarioMode.REPLAYING : WiremockScenarioMode.RECORDING;
             setupWiremockScenario(mappingsFolder, mode);
         }
@@ -60,11 +63,11 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     private String mappingsFolderForSetupMethod(IMethodInvocation invocation) {
         String featureName = invocation.getFeature().getName();
         String specName = invocation.getSpec().getFilename().replace(".groovy", "");
-        return "build/wiremock/" + featureName + specName;
+        return mappingsParentFolder + featureName + specName;
     }
 
     private String mappingsFolderForSetupSpecMethod(IMethodInvocation invocation) {
-        return "build/wiremock/" + invocation.getSpec().getFilename().replace(".groovy", "");
+        return mappingsParentFolder + invocation.getSpec().getFilename().replace(".groovy", "");
     }
 
     @Override
