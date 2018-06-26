@@ -7,6 +7,9 @@ import org.apache.http.impl.client.HttpClientBuilder
 import org.apache.http.util.EntityUtils
 import spock.lang.*
 
+import java.nio.file.Files
+import java.nio.file.Paths
+
 import static com.github.tomakehurst.wiremock.client.WireMock.*
 import static com.google.common.base.Charsets.UTF_8
 
@@ -17,11 +20,14 @@ class WiremockExtensionTest extends Specification {
     @AutoCleanup
     CloseableHttpClient httpClient = HttpClientBuilder.create().build()
 
+    def cleanupSpec() {
+        new File('build/wiremock').deleteDir()
+    }
+
     @WiremockScenario(
-            mode = WiremockScenarioMode.RECORDING,
             ports = [8081],
             targets = ['http://localhost:8080'],
-            mappingsFolder = 'WiremockExtension'
+            mappingsFolder = 'build/wiremock/wiremockExtension'
     )
     def "record"() {
         given:
@@ -44,9 +50,8 @@ class WiremockExtensionTest extends Specification {
     }
 
     @WiremockScenario(
-            mode = WiremockScenarioMode.REPLAYING,
             replayPort = 8082,
-            mappingsFolder = 'WiremockExtension'
+            mappingsFolder = 'build/wiremock/wiremockExtension'
     )
     def "replay"() {
         expect:

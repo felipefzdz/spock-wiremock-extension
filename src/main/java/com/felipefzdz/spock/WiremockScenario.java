@@ -12,8 +12,6 @@ import java.lang.annotation.Target;
 @ExtensionAnnotation(WiremockScenarioExtension.class)
 
 public @interface WiremockScenario {
-    WiremockScenarioMode mode();
-
     int[] ports() default {};
 
     String[] targets() default {};

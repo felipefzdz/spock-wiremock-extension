@@ -10,7 +10,9 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.recordSpec;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
@@ -18,69 +20,68 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options
 public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
 
     private final Proxies proxies;
-    private final WiremockScenarioMode mode;
     private final int replayPort;
-    private final String mappingsFolder;
-    private static final Set<WiremockScenarioMode> alreadyIntercepted = new TreeSet<>();
+    private final String maybeMappingsFolder;
+    private final String featureName;
     private static final List<WireMockServer> recordingServers = new ArrayList<>();
     private static WireMockServer replayServer;
+    private WiremockScenarioMode mode;
 
     WiremockScenarioInterceptor(
             int[] ports,
             String[] targets,
-            WiremockScenarioMode mode,
             int replayPort,
-            String mappingsFolder) {
-        this.mode = mode;
+            String mappingsFolder,
+            String featureName) {
         this.replayPort = replayPort;
-        this.mappingsFolder = mappingsFolder;
-        this.proxies = new Proxies(ports, targets, mode);
+        this.maybeMappingsFolder = mappingsFolder;
+        this.featureName = featureName;
+        this.proxies = new Proxies(ports, targets);
     }
 
     @Override
     public void interceptSetupSpecMethod(IMethodInvocation invocation) throws Throwable {
-        if (alreadyIntercepted.add(mode)) {
-            if (mappingsFolder.isEmpty()) {
-                String specName = invocation.getSpec().getFilename().replace(".groovy", "");
-                setupWiremockScenario(specName);
-            } else {
-                setupWiremockScenario(mappingsFolder);
-            }
-        }
+        String mappingsFolder = maybeMappingsFolder.isEmpty() ? mappingsFolderForSetupSpecMethod(invocation) : maybeMappingsFolder;
+        mode = Files.exists(Paths.get(mappingsFolder)) ? WiremockScenarioMode.REPLAYING : WiremockScenarioMode.RECORDING;
+        setupWiremockScenario(maybeMappingsFolder, mode);
         invocation.proceed();
     }
 
     @Override
     public void interceptSetupMethod(IMethodInvocation invocation) throws Throwable {
-        if (alreadyIntercepted.add(mode)) {
-            if (mappingsFolder.isEmpty()) {
-                String featureName = invocation.getFeature().getName();
-                String specName = invocation.getSpec().getFilename().replace(".groovy", "");
-                setupWiremockScenario(featureName + specName);
-            } else {
-                setupWiremockScenario(mappingsFolder);
-            }
+        if (invocation.getFeature().getName().equals(featureName)) {
+            String mappingsFolder = maybeMappingsFolder.isEmpty() ? mappingsFolderForSetupMethod(invocation) : maybeMappingsFolder;
+            mode = Files.exists(Paths.get(mappingsFolder)) ? WiremockScenarioMode.REPLAYING : WiremockScenarioMode.RECORDING;
+            setupWiremockScenario(mappingsFolder, mode);
         }
         invocation.proceed();
+    }
+
+    private String mappingsFolderForSetupMethod(IMethodInvocation invocation) {
+        String featureName = invocation.getFeature().getName();
+        String specName = invocation.getSpec().getFilename().replace(".groovy", "");
+        return "build/wiremock/" + featureName + specName;
+    }
+
+    private String mappingsFolderForSetupSpecMethod(IMethodInvocation invocation) {
+        return "build/wiremock/" + invocation.getSpec().getFilename().replace(".groovy", "");
     }
 
     @Override
     public void interceptCleanupSpecMethod(IMethodInvocation invocation) throws Throwable {
         invocation.proceed();
-        if (alreadyIntercepted.remove(mode)) {
-            cleanupWiremockScenario();
-        }
+        cleanupWiremockScenario();
     }
 
     @Override
     public void interceptCleanupMethod(IMethodInvocation invocation) throws Throwable {
         invocation.proceed();
-        if (alreadyIntercepted.remove(mode)) {
+        if (invocation.getFeature().getName().equals(featureName)) {
             cleanupWiremockScenario();
         }
     }
 
-    private void setupWiremockScenario(String wiremockFolder) {
+    private void setupWiremockScenario(String wiremockFolder, WiremockScenarioMode mode) {
         switch (mode) {
             case RECORDING:
                 record(wiremockFolder);
@@ -88,15 +89,13 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
             case REPLAYING:
                 replay(wiremockFolder);
                 break;
-            case DISABLED:
-                break;
         }
     }
 
     private void record(String wiremockFolder) {
         proxies.iterator().forEachRemaining(proxy -> {
             createDirectory(wiremockFolder);
-            WireMockServer server = new WireMockServer(options().port(proxy.port).usingFilesUnderDirectory("build/wiremock/" + wiremockFolder));
+            WireMockServer server = new WireMockServer(options().port(proxy.port).usingFilesUnderDirectory(wiremockFolder));
             server.start();
             server.startRecording(recordSpec().forTarget(proxy.target));
             recordingServers.add(server);
@@ -105,14 +104,14 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
 
     private Path createDirectory(String wiremockFolder) {
         try {
-            return Files.createDirectories(Paths.get("build/wiremock/" + wiremockFolder + "/mappings"));
+            return Files.createDirectories(Paths.get(wiremockFolder + "/mappings"));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     private void replay(String wiremockFolder) {
-        replayServer = new WireMockServer(options().port(replayPort).usingFilesUnderDirectory("build/wiremock/" + wiremockFolder));
+        replayServer = new WireMockServer(options().port(replayPort).usingFilesUnderDirectory(wiremockFolder));
         replayServer.start();
     }
 
@@ -130,8 +129,6 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
                 replayServer.stop();
                 break;
             }
-            case DISABLED:
-                break;
         }
     }
 
@@ -142,13 +139,10 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     private static class Proxies {
         private final List<Proxy> proxies = new ArrayList<>();
 
-        private Proxies(int[] ports, String[] targets, WiremockScenarioMode mode) {
-            boolean recording = mode.equals(WiremockScenarioMode.RECORDING);
-            if (recording) {
-                assert ports.length == targets.length;
-                for (int i = 0; i < ports.length; i++) {
-                    proxies.add(new Proxy(ports[i], targets[i]));
-                }
+        private Proxies(int[] ports, String[] targets) {
+            assert ports.length == targets.length;
+            for (int i = 0; i < ports.length; i++) {
+                proxies.add(new Proxy(ports[i], targets[i]));
             }
         }
 

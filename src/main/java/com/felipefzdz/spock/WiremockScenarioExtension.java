@@ -13,9 +13,9 @@ public class WiremockScenarioExtension extends AbstractAnnotationDrivenExtension
         WiremockScenarioInterceptor interceptor = new WiremockScenarioInterceptor(
                 annotation.ports(),
                 annotation.targets(),
-                annotation.mode(),
                 annotation.replayPort(),
-                annotation.mappingsFolder()
+                annotation.mappingsFolder(),
+                ""
         );
         interceptor.install(asList(spec.getSetupSpecInterceptors(), spec.getCleanupSpecInterceptors()));
     }
@@ -25,9 +25,9 @@ public class WiremockScenarioExtension extends AbstractAnnotationDrivenExtension
         WiremockScenarioInterceptor interceptor = new WiremockScenarioInterceptor(
                 annotation.ports(),
                 annotation.targets(),
-                annotation.mode(),
                 annotation.replayPort(),
-                annotation.mappingsFolder()
+                annotation.mappingsFolder(),
+                feature.getName()
         );
         interceptor.install(asList(feature.getSpec().getSetupInterceptors(), feature.getSpec().getCleanupInterceptors()));
     }
