@@ -20,4 +20,6 @@ public @interface WiremockScenario {
 
     int replayPort() default 8080;
 
+    String mappingsFolder() default "";
+
 }

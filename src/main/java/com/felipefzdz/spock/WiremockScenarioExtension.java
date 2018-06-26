@@ -10,13 +10,25 @@ public class WiremockScenarioExtension extends AbstractAnnotationDrivenExtension
 
     @Override
     public void visitSpecAnnotation(WiremockScenario annotation, SpecInfo spec) {
-        WiremockScenarioInterceptor interceptor = new WiremockScenarioInterceptor(annotation.ports(), annotation.targets(), annotation.mode(), annotation.replayPort());
+        WiremockScenarioInterceptor interceptor = new WiremockScenarioInterceptor(
+                annotation.ports(),
+                annotation.targets(),
+                annotation.mode(),
+                annotation.replayPort(),
+                annotation.mappingsFolder()
+        );
         interceptor.install(asList(spec.getSetupSpecInterceptors(), spec.getCleanupSpecInterceptors()));
     }
 
     @Override
     public void visitFeatureAnnotation(WiremockScenario annotation, FeatureInfo feature) {
-        WiremockScenarioInterceptor interceptor = new WiremockScenarioInterceptor(annotation.ports(), annotation.targets(), annotation.mode(), annotation.replayPort());
+        WiremockScenarioInterceptor interceptor = new WiremockScenarioInterceptor(
+                annotation.ports(),
+                annotation.targets(),
+                annotation.mode(),
+                annotation.replayPort(),
+                annotation.mappingsFolder()
+        );
         interceptor.install(asList(feature.getSpec().getSetupInterceptors(), feature.getSpec().getCleanupInterceptors()));
     }
 }
