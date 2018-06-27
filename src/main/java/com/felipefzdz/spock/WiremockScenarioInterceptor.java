@@ -52,7 +52,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     public void interceptSetupSpecMethod(IMethodInvocation invocation) throws Throwable {
         String mappingsFolder = maybeMappingsFolder.isEmpty() ? mappingsFolderForSetupSpecMethod(invocation) : mappingsParentFolder + maybeMappingsFolder;
         mode = calculateMode(mappingsFolder);
-        setupWiremockScenario(maybeMappingsFolder, mode);
+        setupWiremockScenario(mappingsFolder, mode);
         invocation.proceed();
     }
 
