@@ -1,7 +1,11 @@
 plugins {
     id 'java-library'
     id 'groovy'
+    id "com.jfrog.bintray" version "1.8.3"
 }
+
+apply plugin: 'maven-publish'
+
 
 dependencies {
     api 'org.spockframework:spock-core:1.1-groovy-2.4'
@@ -13,4 +17,38 @@ dependencies {
 
 repositories {
     jcenter()
+}
+
+jar {
+    manifest {
+        attributes('Implementation-Title': project.name,
+                'Implementation-Version': project.version)
+    }
+}
+
+publishing {
+    publications {
+        MyPublication(MavenPublication) {
+            from components.java
+            groupId 'com.felipefdzdz.spock'
+            artifactId 'spock-wiremock-extension'
+            version '0.1.0'
+        }
+    }
+}
+
+bintray {
+    user = System.getenv('BINTRAY_USER')
+    key = System.getenv('BINTRAY_KEY')
+    pkg {
+        repo = 'spock-wiremock-extension'
+        name = 'spock-wiremock-extension'
+        userOrg = 'felipefzdz'
+        licenses = ['Apache-2.0']
+        vcsUrl = 'https://github.com/felipefzdz/spock-wiremock-extension.git'
+        version {
+            name = '0.1.0'
+        }
+        publications = ['MyPublication']
+    }
 }
