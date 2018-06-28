@@ -13,6 +13,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*
 import static com.google.common.base.Charsets.UTF_8
 
 @WiremockScenario(
+        recordIf = { true },
         ports = [8081],
         targets = ['http://localhost:9080'],
         mappingsParentFolder = 'build/wiremock/'
@@ -23,7 +24,7 @@ class RecordSpecTest extends Specification {
     @AutoCleanup
     CloseableHttpClient httpClient = HttpClientBuilder.create().build()
 
-    def "record"() {
+    def "record spec"() {
         given:
         WireMockServer server = new WireMockServer(9080)
         server.start()
