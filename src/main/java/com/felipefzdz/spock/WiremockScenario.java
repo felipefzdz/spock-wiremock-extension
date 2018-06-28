@@ -3,15 +3,12 @@ package com.felipefzdz.spock;
 import groovy.lang.Closure;
 import org.spockframework.runtime.extension.ExtensionAnnotation;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE, ElementType.METHOD})
 @ExtensionAnnotation(WiremockScenarioExtension.class)
-
+@Inherited
 public @interface WiremockScenario {
     int[] ports() default {};
 
