@@ -55,7 +55,7 @@ class ForceRecordTest extends Specification {
             targets = ['http://localhost:9081'],
             mappingsParentFolder = 'src/test/resources/wiremock/',
             mappingsFolder = 'forceRecord',
-            recordIf = { true }
+            recordIf = { ForceRecordTest.forceRecord() }
     )
     def "force record"() {
         given:
@@ -84,6 +84,10 @@ class ForceRecordTest extends Specification {
         httpClient.execute(new HttpGet(url)).withCloseable {
             it.entity == null ? null : EntityUtils.toString(it.entity, UTF_8.name())
         }
+    }
+
+    private static boolean forceRecord() {
+        true
     }
 
 

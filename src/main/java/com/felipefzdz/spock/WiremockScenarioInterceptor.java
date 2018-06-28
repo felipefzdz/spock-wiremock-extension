@@ -7,7 +7,6 @@ import org.spockframework.runtime.extension.AbstractMethodInterceptor;
 import org.spockframework.runtime.extension.ExtensionException;
 import org.spockframework.runtime.extension.IMethodInterceptor;
 import org.spockframework.runtime.extension.IMethodInvocation;
-import org.spockframework.runtime.extension.builtin.PreconditionContext;
 
 import java.io.File;
 import java.io.IOException;
@@ -57,8 +56,8 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     }
 
     private WiremockScenarioMode calculateMode(String mappingsFolder) {
-        Optional<Closure> condition = createCondition();
-        boolean isRecord = condition.map(this::evaluateCondition)
+        Optional<Closure> closure = createClosure();
+        boolean isRecord = closure.map(this::evaluateClosure)
                 .map(GroovyRuntimeUtil::isTruthy)
                 .orElse(false);
         if (isRecord) {
@@ -67,7 +66,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
         return Files.exists(Paths.get(mappingsFolder)) ? WiremockScenarioMode.REPLAYING : WiremockScenarioMode.RECORDING;
     }
 
-    private Optional<Closure> createCondition() {
+    private Optional<Closure> createClosure() {
         try {
             return Optional.of(recordIf.getConstructor(Object.class, Object.class).newInstance(null, null));
         } catch (Exception e) {
@@ -75,14 +74,12 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
         }
     }
 
-    private Object evaluateCondition(Closure condition) {
-        condition.setDelegate(new PreconditionContext());
-        condition.setResolveStrategy(Closure.DELEGATE_ONLY);
-
+    private Object evaluateClosure(Closure closure) {
+        closure.setResolveStrategy(Closure.DELEGATE_ONLY);
         try {
-            return condition.call();
+            return closure.call();
         } catch (Exception e) {
-            throw new ExtensionException("Failed to evaluate recordIf condition", e);
+            throw new ExtensionException("Failed to evaluate recordIf closure", e);
         }
     }
 
