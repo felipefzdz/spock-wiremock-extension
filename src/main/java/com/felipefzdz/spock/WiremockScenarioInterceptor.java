@@ -15,7 +15,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.recordSpec;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
@@ -30,7 +29,6 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     private final String featureName;
     private static final List<WireMockServer> recordingServers = new ArrayList<>();
     private static WireMockServer replayServer;
-    private static AtomicBoolean alreadySpecIntercepted = new AtomicBoolean(false);
     private WiremockScenarioMode mode = WiremockScenarioMode.UNDEFINED;
 
     WiremockScenarioInterceptor(
@@ -51,7 +49,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
 
     @Override
     public void interceptSetupSpecMethod(IMethodInvocation invocation) throws Throwable {
-        if (!alreadySpecIntercepted.getAndSet(true)) {
+        if (invocation.getSpec().getSubSpec() == null) {
             String mappingsFolder = maybeMappingsFolder.isEmpty() ? mappingsFolderForSetupSpecMethod(invocation) : mappingsParentFolder + maybeMappingsFolder;
             mode = calculateMode(mappingsFolder);
             setupWiremockScenario(mappingsFolder, mode);
