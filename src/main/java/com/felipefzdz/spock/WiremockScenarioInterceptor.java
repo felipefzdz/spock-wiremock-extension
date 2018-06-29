@@ -25,7 +25,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     private final int replayPort;
     private final String mappingsParentFolder;
     private final String maybeMappingsFolder;
-    private final Class<? extends Closure> recordIf;
+    private final Class<? extends Closure> resetRecordIf;
     private final String featureName;
     private static final List<WireMockServer> recordingServers = new ArrayList<>();
     private static WireMockServer replayServer;
@@ -35,14 +35,14 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
             int[] ports,
             String[] targets,
             int replayPort,
-            String maybeMappingsParentFolder,
+            String mappingsParentFolder,
             String maybeMappingsFolder,
-            Class<? extends Closure> recordIf,
+            Class<? extends Closure> resetRecordIf,
             String featureName) {
         this.replayPort = replayPort;
-        this.mappingsParentFolder = maybeMappingsParentFolder.isEmpty() ? "src/test/resources/wiremock/" : maybeMappingsParentFolder;
+        this.mappingsParentFolder = mappingsParentFolder;
         this.maybeMappingsFolder = maybeMappingsFolder;
-        this.recordIf = recordIf;
+        this.resetRecordIf = resetRecordIf;
         this.featureName = featureName;
         this.proxies = new Proxies(ports, targets);
     }
@@ -70,7 +70,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
 
     private Optional<Closure> createClosure() {
         try {
-            return Optional.of(recordIf.getConstructor(Object.class, Object.class).newInstance(null, null));
+            return Optional.of(resetRecordIf.getConstructor(Object.class, Object.class).newInstance(null, null));
         } catch (Exception e) {
             return Optional.empty();
         }
@@ -81,7 +81,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
         try {
             return closure.call();
         } catch (Exception e) {
-            throw new ExtensionException("Failed to evaluate recordIf closure", e);
+            throw new ExtensionException("Failed to evaluate resetRecordIf closure", e);
         }
     }
 
@@ -96,7 +96,7 @@ public class WiremockScenarioInterceptor extends AbstractMethodInterceptor {
     }
 
     private String mappingsFolderForSetupMethod(IMethodInvocation invocation) {
-        String featureName = invocation.getFeature().getName();
+        String featureName = invocation.getFeature().getName().replace(" ", "");
         String specName = invocation.getSpec().getFilename().replace(".groovy", "");
         return mappingsParentFolder + featureName + specName;
     }

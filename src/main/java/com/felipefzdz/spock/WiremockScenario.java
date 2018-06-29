@@ -16,10 +16,10 @@ public @interface WiremockScenario {
 
     int replayPort() default 8080;
 
-    String mappingsParentFolder() default "";
+    String mappingsParentFolder() default "src/test/resources/wiremock/";
 
     String mappingsFolder() default "";
 
-    Class<? extends Closure> recordIf() default Closure.class;
+    Class<? extends Closure> resetRecordIf() default Closure.class;
 
 }

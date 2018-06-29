@@ -1,1 +1,130 @@
-# spock-wiremock-extension
+= Spock Wiremock Extension image:https://circleci.com/gh/felipefzdz/spock-wiremock-extension.svg?style=svg["CircleCI", link="https://circleci.com/gh/felipefzdz/spock-wiremock-extension"]
+
+== Overview
+
+link:http://wiremock.org/docs/record-playback/[Wiremock] has a great functionality around stub recording and playback. This might be
+useful for integration testing against problematic services for reasons such as:
+
+- Third party APIs without sandbox environments. Some APIs don't provide testing capabilities through isolated environments,
+ as a consequence tests need to hit production APIs. Used API key might be banned from unfair usage or rate limited
+ adding more latency to the tests.
+
+- Latency. Target services might be located far from where the tests are executed increasing the feedback loop.
+
+If those services are stable enough, recording the responses to playback them in further executions will overcome above's issues.
+Depending on our lifecycle and testing gateways, we could re-record the stubs on demand.
+
+This Spock Extension helps with the chore work around this process, automating it through some configurable conventions.
+
+== Usage
+
+[source,groovy]
+----
+dependencies {
+    testCompile ('com.felipefdzdz.spock:spock-wiremock-extension:0.1.12') {
+        exclude group: 'org.codehaus.groovy'
+    }
+}
+----
+
+Configuration of the extension leverages this `WiremockScenario` annotation.
+
+[options="header"]
+|=======
+|Field                  |Type                       |Default value                      |Description
+|`targets`              |String[]                   |[]                                 |On Recording mode, the target services that will be recorded against, e.g. `['https://api.heroku.com', 'https://functional-test-app.herokuapp.com'`
+|`ports`                |int[]                      |[]                                 |On Recording mode, the ports where Wiremock proxies will be listening on. There's an untyped assumption about the size and sorting of this `ports` array, it needs to match with the `targets` array (since the lack of support for non-primitive objects on Java Annotations)
+|`replayPort`           |int                        |8080                               |On Replay mode, the port where Wiremock proxy will be serving the stub mappings.
+|`mappingsParentFolder` |String                     |"src/test/resources/wiremock/"     |Parent folder where the stub mappings will be stored.
+|`mappingsFolder`       |String                     |""                                 |Actual folder where the stub mappings will be stored. When not provided, the name will be inferred on the spec and/or feature name.
+|`resetRecordIf`             |Class<? extends Closure>   |Closure.class -> Effectively false.|Force recording mode, even when stub mappings exist.
+|=======
+
+There are three implicit states that defines the behaviour of the extension.
+
+- Record. When the mappings folder doesn't exist, several Wiremock instances will be spin up listening on the defined `ports`.
+Calls to those targets will be recorded and stored on the mappings folder.
+- Reset Record. When `resetRecordIf` closure evaluates truthy, the related optionally existing mappings folder will be wiped out, just before
+record mode kicks off.
+- Replay. When the mappings folder exists, a single Wiremock instance will be serving the recorded stubs listening on the `replayPort`.
+
+N.B. Disregarding your injection mechanism (being DI or through env vars), your code will have to hit the Wiremock proxies instead
+of the actual targets. That applies for Record and Replay modes. Let's see an example: you have a configurable client to interact with Heroku API, that relies
+on an env var `HEROKU_HOST` to define the actual host where the API lives. You should redefine such var on your testing automation using the appropriate port `export HEROKU_HOST=http:localhost:8080`.
+
+Let's understand the usage patterns supported by the different annotation targets.
+
+=== Type Target
+
+[source,groovy]
+----
+@WiremockScenario(
+        targets = ['https://api.heroku.com', 'https://functional-test-app.herokuapp.com'],
+        ports = [8080, 8081],
+        replayPort = 8080,
+        mappingsParentFolder = 'src/functTest/resources/',
+        mappingsFolder = 'mySpecFolder',
+        resetRecordIf = { Boolean.valueOf(System.getenv('FORCE_RECORD')) }
+)
+class MySpec extends Specification {
+----
+
+This will collect every single remote call that your tests do to `https://api.heroku.com` and `https://functional-test-app.herokuapp.com`
+on a folder located on `src/functTest/resources/mySpecFolder/mappings`.
+
+If no `mappingsFolder` is provided, the value will be inferred from the spec name, i.e. `src/functTest/resources/MySpec/mappings`.
+
+Bear in mind that record/replay on Wiremock relies on stateful scenarios, meaning, the order of the remote calls matters. Hence,
+if you have several features on an annotated spec, you should annotate your spec with `@Stepwise` to enforce the order of the tests, aka
+if the tests are shuffled, they will fail.
+
+This annotation is annotated with the meta-annotation `@Inherited` (great sentence ever). So, you can annotate a base testing class to reduce
+duplication.
+
+Java Annotations are 'resolved' at compile time, so you need to inject constant values into those fields. With Groovy, we can
+workaround that limitation by providing a Closure that references methods. However, those methods need to be static, as there is
+no `this` at that static time. Unfortunately, that means that we can't leverage the full power of abstract base testing classes like
+referencing an abstract to-be-overriden method called `getMappingsFolder()`. This remark serves as a reminder of the limitations of
+this annotation based approach.
+
+=== Method Target
+
+[source,groovy]
+----
+class ThisAndThatSpec extends Specification {
+
+    @WiremockScenario(
+        targets = ['https://api.heroku.com', 'https://functional-test-app.herokuapp.com'],
+        ports = [8080, 8081],
+        replayPort = 8080,
+        mappingsParentFolder = 'src/functTest/resources/',
+        resetRecordIf = { Boolean.valueOf(System.getenv('FORCE_RECORD')) }
+    )
+    def "this feature"()
+
+    @WiremockScenario(
+        targets = ['https://api.heroku.com', 'https://facebook.com'],
+        ports = [8080, 8081],
+        replayPort = 8080,
+        mappingsParentFolder = 'src/functTest/resources/',
+        resetRecordIf = { Boolean.valueOf(System.getenv('FORCE_RECORD')) }
+    )
+    def "that feature"()
+----
+
+If you need different stateful scenarios on the same spec (mainly because you hit different targets), you can use method
+target annotations.
+
+Bear in mind that those Wiremock fixtures are isolated per feature, meaning, the instances are cleanup after every feature
+so you don't need to worry about ports isolation.
+
+If no `mappingsFolder` is provided an inference similar to the above's one will be used, this time using the feature name. The
+stub mappings for these features will be stored on: `src/functTest/resources/thisfeatureThisAndThatSpec/mappings` and
+`src/functTest/resources/thatfeaturethisAndThatSpec/mappings`. The folders are namespaced with the spec class to ensure
+their uniqueness across the whole test suite.
+
+
+
+
+
+

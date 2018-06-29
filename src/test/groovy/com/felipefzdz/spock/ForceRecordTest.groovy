@@ -55,7 +55,7 @@ class ForceRecordTest extends Specification {
             targets = ['http://localhost:9081'],
             mappingsParentFolder = 'src/test/resources/wiremock/',
             mappingsFolder = 'forceRecord',
-            recordIf = { ForceRecordTest.forceRecord() }
+            resetRecordIf = { ForceRecordTest.forceRecord() }
     )
     def "force record"() {
         given:

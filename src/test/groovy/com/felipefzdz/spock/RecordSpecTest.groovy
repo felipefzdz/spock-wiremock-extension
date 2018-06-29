@@ -13,7 +13,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*
 import static com.google.common.base.Charsets.UTF_8
 
 @WiremockScenario(
-        recordIf = { true },
+        resetRecordIf = { true },
         ports = [8081],
         targets = ['http://localhost:9080'],
         mappingsParentFolder = 'build/wiremock/'
